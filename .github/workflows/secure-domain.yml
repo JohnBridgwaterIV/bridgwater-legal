@@ -1,0 +1,68 @@
+name: Finish HTTPS setup
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Verified main commit
+        required: true
+        type: string
+permissions:
+  contents: read
+  pages: write
+concurrency:
+  group: legal-domain-https
+  cancel-in-progress: false
+jobs:
+  secure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - name: Guard verified main
+        shell: pwsh
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          if ($env:GITHUB_REF -ne 'refs/heads/main') { throw 'Main only.' }
+          if (git status --porcelain) { throw 'Clean checkout required.' }
+          git fetch origin main
+          if ($LASTEXITCODE) { throw 'Fetch failed.' }
+          $sha=(git rev-parse HEAD).Trim()
+          if ($sha -ne $env:EXPECTED_SHA -or $sha -ne (git rev-parse origin/main).Trim()) { throw 'Commit mismatch.' }
+      - name: Wait for certificate and enforce HTTPS
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $siteBase='https://legal.bridgwaterauto.com/'
+          for($attempt=0; $attempt -lt 60; $attempt++) {
+            $raw=gh api repos/JohnBridgwaterIV/bridgwater-legal/pages
+            if($LASTEXITCODE) { throw 'Cannot read Pages settings.' }
+            $page=$raw | ConvertFrom-Json
+            if($page.cname -ne 'legal.bridgwaterauto.com') { throw 'Unexpected custom domain.' }
+            $certificateState=if($page.https_certificate){$page.https_certificate.state}else{'pending'}
+            Write-Output "Certificate check $($attempt+1): $certificateState"
+            if($page.https_certificate -and $certificateState -eq 'approved') {
+              gh api --method PUT repos/JohnBridgwaterIV/bridgwater-legal/pages -F https_enforced=true
+              if($LASTEXITCODE) { throw 'Cannot enforce HTTPS.' }
+              $manifest=Invoke-RestMethod -Uri ($siteBase+'release.json') -TimeoutSec 30
+              if($manifest.commit -ne $env:GITHUB_SHA) { throw 'Installed commit mismatch.' }
+              foreach($file in $manifest.hashes.PSObject.Properties) {
+                $response=Invoke-WebRequest -Uri ($siteBase+$file.Name) -TimeoutSec 30
+                $stream=$response.RawContentStream
+                $stream.Position=0
+                $hasher=[Security.Cryptography.SHA256]::Create()
+                $actual=[Convert]::ToHexString($hasher.ComputeHash($stream)).ToLowerInvariant()
+                if($actual -ne $file.Value) { throw "Installed hash mismatch: $($file.Name)" }
+              }
+              $http=Invoke-WebRequest -Uri 'http://legal.bridgwaterauto.com/' -TimeoutSec 30
+              if($http.BaseResponse.RequestMessage.RequestUri.Scheme -ne 'https') { throw 'HTTP did not redirect to HTTPS.' }
+              $confirmed=gh api repos/JohnBridgwaterIV/bridgwater-legal/pages | ConvertFrom-Json
+              if(-not $confirmed.https_enforced) { throw 'HTTPS enforcement not confirmed.' }
+              'HTTPS enforced. Certificate validated, HTTP redirect verified, and all installed file hashes verified.' | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY
+              exit 0
+            }
+            Start-Sleep -Seconds 60
+          }
+          throw 'GitHub has not issued a certificate within the one-hour check. Review Pages domain validation before retrying.'
