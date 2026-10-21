@@ -1,0 +1,50 @@
+name: Publish legal pages
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact verified main commit
+        required: true
+        type: string
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: legal-pages-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Guard and build
+        shell: pwsh
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          if ($env:GITHUB_REF -ne 'refs/heads/main') { throw 'Main only.' }
+          if (git status --porcelain) { throw 'Checkout must be clean.' }
+          git fetch origin main
+          if ($LASTEXITCODE) { throw 'Fetch failed.' }
+          $sha = (git rev-parse HEAD).Trim()
+          if ($sha -ne $env:EXPECTED_SHA -or $sha -ne (git rev-parse origin/main).Trim()) { throw 'Commit mismatch.' }
+          ./Build.ps1
+          if (git status --porcelain) { throw 'Built pages differ from committed pages.' }
+          $files = [ordered]@{}
+          Get-ChildItem public -Recurse -Force -File | Sort-Object FullName | ForEach-Object {
+            $relative = [IO.Path]::GetRelativePath((Join-Path $PWD 'public'), $_.FullName).Replace('\','/')
+            $files[$relative] = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+          $pacific = [TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTimeOffset]::UtcNow, 'America/Los_Angeles')
+          @{version=(Get-Content VERSION).Trim(); commit=$sha; published_pacific=$pacific.ToString('yyyy-MM-ddTHH:mm:sszzz'); hashes=$files} | ConvertTo-Json -Depth 5 | Set-Content public/release.json -Encoding utf8
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
