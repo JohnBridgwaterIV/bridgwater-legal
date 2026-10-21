@@ -5,10 +5,10 @@ function Write-Page($relativePath,$title,$body) {
  New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null
  $prefix = '../' * ($relativePath.Split('/').Count - 1)
  $template = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'template.html') -Raw
- $html = $template.Replace('{{TITLE}}',[Net.WebUtility]::HtmlEncode($title)).Replace('{{BODY}}',$body).Replace('{{ROOT}}',$prefix)
+ $html = $template.Replace('{{TITLE}}',[Net.WebUtility]::HtmlEncode($title)).Replace('{{BODY}}',$body).Replace('{{ROOT}}',$prefix).Replace('{{VERSION}}',(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'VERSION')).Trim())
  [IO.File]::WriteAllText($destination,$html,[Text.UTF8Encoding]::new($false))
 }
-foreach ($entry in @(@('eula','End User License Agreement'),@('privacy','Privacy Policy'),@('disconnected','Disconnect instructions'),@('app','Daily Deposit Automation'))) {
+foreach ($entry in @(@('eula','End User License Agreement'),@('privacy','Privacy Policy'),@('disconnected','Disconnect instructions'),@('connect','Connect or reconnect QuickBooks'),@('app','Daily Deposit Automation'))) {
  $body = (ConvertFrom-Markdown -LiteralPath (Join-Path $PSScriptRoot "content/$($entry[0]).md")).Html
  $page = if($entry[0] -eq 'app'){'daily-deposit-automation/index.html'}else{"daily-deposit-automation/$($entry[0])/index.html"}
  Write-Page $page $entry[1] $body
