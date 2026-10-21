@@ -33,7 +33,7 @@ The operator may disclose information when legally required or when reasonably n
 
 ## 5. Storage and protection
 
-Application credentials are intended to be kept in the configured credential manager rather than source code, public legal pages, or ordinary reports. Access to business systems and records is limited through the controls configured by the operator and its providers. No storage or transmission system can be guaranteed completely secure.
+Configured application credentials may be held in 1Password. The unattended Windows runner can keep an encrypted copy of application credentials and rotating OAuth tokens protected for the authorized Windows user on the business computer. A dedicated TekMetric browser profile can retain the signed-in report session on that computer. Credentials and tokens are not placed in source code, public legal pages, or ordinary reports. Access to business systems and records is limited through the controls configured by the operator and its providers. No storage or transmission system can be guaranteed completely secure.
 
 ## 6. Retention
 

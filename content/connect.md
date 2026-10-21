@@ -6,7 +6,7 @@ Daily Deposit Automation is an internal tool for Bridgwater Automotive LLC. Only
 
 ## Current availability
 
-Production connection is being prepared. The existing desktop runner is limited to the sandbox environment. Opening this page does not connect a company or start deposit processing.
+A production-capable desktop runner is available for administrator-managed setup. Production processing requires a verified QuickBooks connection, secure credential storage, and access to the source payout reports. Opening this page does not connect a company or start deposit processing.
 
 ## Administrator connection steps
 

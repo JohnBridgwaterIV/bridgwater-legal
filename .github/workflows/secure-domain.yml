@@ -11,7 +11,7 @@ on:
         type: string
 permissions:
   contents: read
-  pages: write
+  pages: read
 concurrency:
   group: legal-domain-https
   cancel-in-progress: false
@@ -33,7 +33,7 @@ jobs:
           if ($LASTEXITCODE) { throw 'Fetch failed.' }
           $sha=(git rev-parse HEAD).Trim()
           if ($sha -ne $env:EXPECTED_SHA -or $sha -ne (git rev-parse origin/main).Trim()) { throw 'Commit mismatch.' }
-      - name: Wait for certificate and enforce HTTPS
+      - name: Wait for certificate and verify HTTPS
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -48,18 +48,19 @@ jobs:
             $certificateState=if($page.https_certificate){$page.https_certificate.state}else{'pending'}
             Write-Output "Certificate check $($attempt+1): $certificateState"
             if($page.https_certificate -and $certificateState -eq 'approved') {
-              gh api --method PUT repos/JohnBridgwaterIV/bridgwater-legal/pages -F https_enforced=true
-              if($LASTEXITCODE) { throw 'Cannot enforce HTTPS.' }
+              if(-not $page.https_enforced) { throw 'Certificate approved; a repository owner must enable Enforce HTTPS. The default Actions token cannot change this Pages setting.' }
               $manifest=Invoke-RestMethod -Uri ($siteBase+'release.json') -TimeoutSec 30
-              if($manifest.commit -ne $env:GITHUB_SHA) { throw 'Installed commit mismatch.' }
+              if($manifest.commit -ne $env:GITHUB_SHA) { Write-Output 'Waiting for the new release to propagate.'; Start-Sleep -Seconds 60; continue }
+              $hashesMatch=$true
               foreach($file in $manifest.hashes.PSObject.Properties) {
                 $response=Invoke-WebRequest -Uri ($siteBase+$file.Name) -TimeoutSec 30
                 $stream=$response.RawContentStream
                 $stream.Position=0
                 $hasher=[Security.Cryptography.SHA256]::Create()
                 $actual=[Convert]::ToHexString($hasher.ComputeHash($stream)).ToLowerInvariant()
-                if($actual -ne $file.Value) { throw "Installed hash mismatch: $($file.Name)" }
+                if($actual -ne $file.Value) { $hashesMatch=$false; break }
               }
+              if(-not $hashesMatch) { Write-Output 'Waiting for matching installed file hashes.'; Start-Sleep -Seconds 60; continue }
               $http=Invoke-WebRequest -Uri 'http://legal.bridgwaterauto.com/' -TimeoutSec 30
               if($http.BaseResponse.RequestMessage.RequestUri.Scheme -ne 'https') { throw 'HTTP did not redirect to HTTPS.' }
               $confirmed=gh api repos/JohnBridgwaterIV/bridgwater-legal/pages | ConvertFrom-Json
