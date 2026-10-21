@@ -3,7 +3,7 @@
 Public legal pages for Daily Deposit Automation. Operator: Bridgwater Automotive LLC. Contact: john@bridgwaterauto.com.
 
 Assigned checkout: C:\BA\Repos\Bridgwater-Legal
-Origin: https://github.com/BridgwaterAutomotive/bridgwater-legal.git
+Origin: https://github.com/JohnBridgwaterIV/bridgwater-legal.git
 Public site: https://legal.bridgwaterauto.com/
 
 Edit content/, run ./Build.ps1, review public/, commit and push main immediately, then run ./Deploy.ps1. The deployer requires a clean main checkout equal to freshly fetched origin/main and checks the expected origin. GitHub Actions independently checks the requested commit before publishing.
