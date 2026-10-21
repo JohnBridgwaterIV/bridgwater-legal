@@ -1,5 +1,8 @@
 name: Finish HTTPS setup
 on:
+  workflow_run:
+    workflows: ['Publish legal pages']
+    types: [completed]
   workflow_dispatch:
     inputs:
       expected_sha:
@@ -14,6 +17,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   secure:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_sha == github.sha)
     runs-on: ubuntu-latest
     timeout-minutes: 70
     steps:
@@ -21,7 +25,7 @@ jobs:
       - name: Guard verified main
         shell: pwsh
         env:
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_SHA: ${{ inputs.expected_sha || github.event.workflow_run.head_sha }}
         run: |
           if ($env:GITHUB_REF -ne 'refs/heads/main') { throw 'Main only.' }
           if (git status --porcelain) { throw 'Clean checkout required.' }
